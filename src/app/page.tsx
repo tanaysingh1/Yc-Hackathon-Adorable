@@ -1,17 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { PromptInput, PromptInputActions } from "@/components/ui/prompt-input";
-import { FrameworkSelector } from "@/components/framework-selector";
 import Image from "next/image";
 import LogoSvg from "@/logo.svg";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { ExampleButton } from "@/components/ExampleButton";
 import { UserButton } from "@stackframe/stack";
 import { UserApps } from "@/components/user-apps";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PromptInputTextareaWithTypingAnimation } from "@/components/prompt-input";
+import { EnhancedPromptInput } from "@/components/enhanced-prompt-input";
+import { CompressedImage } from "@/lib/image-compression";
 
 const queryClient = new QueryClient();
 
@@ -21,11 +19,32 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (text: string, images: CompressedImage[]) => {
     setIsLoading(true);
 
+    // Create a message parts structure similar to what the chat uses
+    const messageParts = [];
+    
+    if (text.trim()) {
+      messageParts.push({
+        type: "text",
+        text: text,
+      });
+    }
+
+    images.forEach((image) => {
+      messageParts.push({
+        type: "file",
+        mediaType: image.mimeType,
+        url: image.data,
+      });
+    });
+
+    // Encode the complex message structure as JSON
+    const messageData = JSON.stringify({ parts: messageParts });
+
     router.push(
-      `/app/new?message=${encodeURIComponent(prompt)}&template=${framework}`
+      `/app/new?messageData=${encodeURIComponent(messageData)}&template=${framework}`
     );
   };
 
@@ -55,39 +74,14 @@ export default function Home() {
             </p>
 
             <div className="w-full relative my-5">
-              <div className="relative w-full max-w-full overflow-hidden">
-                <div className="w-full bg-accent rounded-md relative z-10 border transition-colors">
-                  <PromptInput
-                    leftSlot={
-                      <FrameworkSelector
-                        value={framework}
-                        onChange={setFramework}
-                      />
-                    }
-                    isLoading={isLoading}
-                    value={prompt}
-                    onValueChange={setPrompt}
-                    onSubmit={handleSubmit}
-                    className="relative z-10 border-none bg-transparent shadow-none focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-200 transition-all duration-200 ease-in-out "
-                  >
-                    <PromptInputTextareaWithTypingAnimation />
-                    <PromptInputActions>
-                      <Button
-                        variant={"ghost"}
-                        size="sm"
-                        onClick={handleSubmit}
-                        disabled={isLoading || !prompt.trim()}
-                        className="h-7 text-xs"
-                      >
-                        <span className="hidden sm:inline">
-                          Start Creating ⏎
-                        </span>
-                        <span className="sm:hidden">Create ⏎</span>
-                      </Button>
-                    </PromptInputActions>
-                  </PromptInput>
-                </div>
-              </div>
+              <EnhancedPromptInput
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                framework={framework}
+                onFrameworkChange={setFramework}
+                isLoading={isLoading}
+                onSubmit={handleSubmit}
+              />
             </div>
             <Examples setPrompt={setPrompt} />
             <div className="mt-8 mb-16">

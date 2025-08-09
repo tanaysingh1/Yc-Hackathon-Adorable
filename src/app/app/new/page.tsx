@@ -33,15 +33,37 @@ export default async function NewAppRedirectPage({
     );
   }
 
-  let message: string | undefined;
-  if (Array.isArray(search.message)) {
-    message = search.message[0];
-  } else {
-    message = search.message;
+  // Handle both old message format and new messageData format for backward compatibility
+  let messageParts: any[] | undefined;
+  
+  if (search.messageData) {
+    try {
+      const messageDataStr = Array.isArray(search.messageData) 
+        ? search.messageData[0] 
+        : search.messageData;
+      const parsed = JSON.parse(decodeURIComponent(messageDataStr));
+      messageParts = parsed.parts;
+    } catch (error) {
+      console.error("Failed to parse messageData:", error);
+      // Fall back to old format
+    }
+  }
+
+  // Backward compatibility: handle old message format
+  if (!messageParts && search.message) {
+    const message = Array.isArray(search.message) ? search.message[0] : search.message;
+    if (message) {
+      messageParts = [
+        {
+          type: "text",
+          text: decodeURIComponent(message),
+        },
+      ];
+    }
   }
 
   const { id } = await createApp({
-    initialMessage: decodeURIComponent(message),
+    initialMessageParts: messageParts,
     templateId: search.template as string,
   });
 

@@ -6,6 +6,36 @@ import { builderAgent } from "@/mastra/agents/builder";
 import { morphTool } from "@/tools/morph-tool";
 import { FreestyleDevServerFilesystem } from "freestyle-sandboxes";
 
+// Helper function to convert UI message parts to Anthropic format
+function convertMessagePartsToAnthropicFormat(parts: UIMessage["parts"]): any[] {
+  return parts.map((part) => {
+    if (part.type === "text") {
+      return {
+        type: "text",
+        text: part.text,
+      };
+    } else if (part.type === "file" && part.mediaType?.startsWith("image/")) {
+      // Convert base64 data URL to Anthropic image format
+      // Handle both with and without data URL prefix
+      let base64Data = part.url;
+      if (part.url.includes(",")) {
+        base64Data = part.url.split(",")[1]; // Remove "data:image/jpeg;base64," prefix
+      }
+      
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: part.mediaType,
+          data: base64Data,
+        },
+      };
+    }
+    // Return other parts as-is for compatibility
+    return part;
+  });
+}
+
 export interface AIStreamOptions {
   threadId: string;
   resourceId: string;
@@ -77,7 +107,16 @@ export class AIService {
 
     const freestyleToolsets = await mcp.getToolsets();
 
-    // Save message to memory
+    // Convert message parts to Anthropic format for proper AI processing
+    const convertedParts = convertMessagePartsToAnthropicFormat(message.parts);
+    
+    // Create a properly formatted message for the AI agent
+    const agentMessage = {
+      role: "user" as const,
+      content: convertedParts,
+    };
+
+    // Save original message to memory (keeping UI format for display)
     const memory = await agent.getMemory();
     if (memory) {
       await memory.saveMessages({
@@ -103,7 +142,8 @@ export class AIService {
       threadId: appId,
     });
 
-    const stream = await agent.stream([], {
+    // Pass the converted message to the agent instead of empty array
+    const stream = await agent.stream([agentMessage], {
       threadId: appId,
       resourceId: appId,
       maxSteps: options?.maxSteps ?? 100,
