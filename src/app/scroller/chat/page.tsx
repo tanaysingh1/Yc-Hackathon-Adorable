@@ -55,6 +55,7 @@ export default function ScrollerChatPage() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [images, setImages] = useState<CompressedImage[]>([]);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onSubmitCore = useCallback(async (text: string, imgs: CompressedImage[]) => {
@@ -77,6 +78,7 @@ export default function ScrollerChatPage() {
 
     if (images.length > 0) {
       try {
+        setLoading(true);
         const firstImage = images[0]!;
         const blob = await fetch(firstImage.data).then((r) => r.blob());
         const filename = `upload.${getExtensionFromMime(firstImage.mimeType)}`;
@@ -92,6 +94,8 @@ export default function ScrollerChatPage() {
         console.log(data);
       } catch (error) {
         console.error("Failed to create sections", error);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -129,9 +133,9 @@ export default function ScrollerChatPage() {
   );
 
   return (
-    <main className="min-h-screen w-full grid place-items-center overflow-x-hidden overflow-y-auto"> 
-      <div className="w-full max-w-2xl px-4">
-        <div className="h-[70vh] flex flex-col">
+    <main className="relative min-h-screen w-full grid place-items-center overflow-x-hidden overflow-y-auto">
+      <div className="relative w-full max-w-2xl px-4">
+        <div className="h-[70vh] flex flex-col justify-center">
           {/* <div className="flex-1 p-4">{content}</div> */}
           {images.length > 0 && (
             <div className="px-4 pb-2">
@@ -169,6 +173,7 @@ export default function ScrollerChatPage() {
                   variant="secondary"
                   className="rounded-xl"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
                 >
                   <Paperclip className="w-4 h-4 mr-2" /> Upload
                 </Button>
@@ -181,9 +186,9 @@ export default function ScrollerChatPage() {
                   type="button"
                   className="rounded-xl"
                   onClick={onSend}
-                  disabled={input.trim() === "" && images.length === 0}
+                  disabled={loading || (input.trim() === "" && images.length === 0)}
                 >
-                  Send <ArrowUp className="w-4 h-4 ml-2" />
+                  {loading ? "Working..." : "Send"} <ArrowUp className="w-4 h-4 ml-2" />
                 </Button>
               </PromptInputActions>
             </PromptInput>
@@ -194,10 +199,22 @@ export default function ScrollerChatPage() {
               multiple
               onChange={handleFileSelect}
               className="hidden"
+              disabled={loading}
             />
           </div>
         </div>
       </div>
+      {loading && (
+        <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-black/40">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-xl bg-neutral-900/80 px-4 py-3 text-white">
+            <svg className="h-5 w-5 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span>Generating sections...</span>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
