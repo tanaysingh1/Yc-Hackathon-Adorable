@@ -124,16 +124,18 @@ export async function POST(request) {
     // Prepare output directory for saving generated images
     const outputDir = path.join(process.cwd(), "public", "scroller", "new");
     await fs.promises.mkdir(outputDir, { recursive: true });
+    // Clear previous files to avoid mixing old and new results
+    try {
+      const existing = await fs.promises.readdir(outputDir);
+      await Promise.all(
+        existing
+          .filter((f) => /\.(png|jpg|jpeg|webp|gif)$/i.test(f))
+          .map((f) => fs.promises.unlink(path.join(outputDir, f)))
+      );
+    } catch {}
 
-    const slugify = (value) =>
-      String(value)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 60);
 
-
-   const imageGenerationPromises = sections.map(async (section) => {
+   const imageGenerationPromises = sections.map(async (section, sectionIdx) => {
      console.log(`Generating images for section: ${section.SectionName}`);
 
 
@@ -152,11 +154,10 @@ export async function POST(request) {
      try {
         console.log(images.images);
         const publicUrls = [];
-        const safeBaseName = slugify(section.SectionName || "section");
         let index = 0;
         for (const image of images.images) {
           if (!image?.base64) continue;
-          const filename = `${safeBaseName}-${Date.now()}-${++index}.png`;
+          const filename = `${sectionIdx + 1}_${++index}.png`;
           const filePath = path.join(outputDir, filename);
           const buffer = Buffer.from(image.base64, "base64");
           await fs.promises.writeFile(filePath, buffer);

@@ -56,44 +56,62 @@ export default async function ScrollerPage() {
     })
   );
 
-  // Group by logical sectionName from filename: <section-name>-<timestamp>-<index>.ext
-  const sectionToItems = new Map<string, { url: string; idx: number; mtimeMs: number }[]>();
-  for (const { name, mtimeMs } of fileMeta) {
-    const noExt = name.replace(/\.[^.]+$/i, "");
-    const parts = noExt.split("-");
-    // Fallbacks to be resilient to unexpected filenames
-    const rawIndexStr = parts[parts.length - 1] ?? "0";
-    const rawTimestampStr = parts[parts.length - 2] ?? "";
-    const sectionName = parts.length >= 3 ? parts.slice(0, -2).join("-") : parts.slice(0, -1).join("-");
-    const idx = Number.parseInt(rawIndexStr, 10);
-    const url = `/scroller/new/${name}`;
-    const arr = sectionToItems.get(sectionName) ?? [];
-    arr.push({ url, idx: Number.isFinite(idx) ? idx : 0, mtimeMs });
-    sectionToItems.set(sectionName, arr);
+  // Prefer new numeric filename pattern: <sectionIndex>_<imageIndex>.<ext>
+  const numericMatches = fileMeta
+    .map(({ name, mtimeMs }) => {
+      const m = name.match(/^(\d+)_([0-9]+)\.(png|jpg|jpeg|webp|gif)$/i);
+      if (!m) return undefined;
+      return {
+        sectionIdx: Number.parseInt(m[1]!, 10),
+        imageIdx: Number.parseInt(m[2]!, 10),
+        url: `/scroller/new/${name}`,
+        mtimeMs,
+      };
+    })
+    .filter(Boolean) as { sectionIdx: number; imageIdx: number; url: string; mtimeMs: number }[];
+
+  let groupsWithNames: CarouselItemData[][] = [];
+
+  if (numericMatches.length > 0) {
+    // Group by sectionIdx
+    const map = new Map<number, { src: string; name: string; imageIdx: number }[]>();
+    for (const it of numericMatches) {
+      const arr = map.get(it.sectionIdx) ?? [];
+      arr.push({ src: it.url, name: `${it.sectionIdx}_${it.imageIdx}`, imageIdx: it.imageIdx });
+      map.set(it.sectionIdx, arr);
+    }
+    const sectionIds = Array.from(map.keys()).sort((a, b) => a - b);
+    groupsWithNames = sectionIds.map((sid) =>
+      (map.get(sid) ?? []).sort((a, b) => a.imageIdx - b.imageIdx).map(({ src, name }) => ({ src, name }))
+    );
+  } else {
+    // Fallback to legacy naming: <section-name>-<timestamp>-<index>.ext
+    const sectionToItems = new Map<string, { url: string; idx: number; mtimeMs: number }[]>();
+    for (const { name, mtimeMs } of fileMeta) {
+      const noExt = name.replace(/\.[^.]+$/i, "");
+      const parts = noExt.split("-");
+      const rawIndexStr = parts[parts.length - 1] ?? "0";
+      const sectionName = parts.length >= 3 ? parts.slice(0, -2).join("-") : parts.slice(0, -1).join("-");
+      const idx = Number.parseInt(rawIndexStr, 10);
+      const url = `/scroller/new/${name}`;
+      const arr = sectionToItems.get(sectionName) ?? [];
+      arr.push({ url, idx: Number.isFinite(idx) ? idx : 0, mtimeMs });
+      sectionToItems.set(sectionName, arr);
+    }
+
+    const sectionsSorted = Array.from(sectionToItems.entries()).sort((a, b) => {
+      const aMin = Math.min(...a[1].map((x) => x.mtimeMs));
+      const bMin = Math.min(...b[1].map((x) => x.mtimeMs));
+      if (aMin !== bMin) return aMin - bMin;
+      return a[0].localeCompare(b[0]);
+    });
+
+    groupsWithNames = sectionsSorted.map(([_, items], groupIdx) =>
+      items
+        .sort((x, y) => (x.idx !== y.idx ? x.idx - y.idx : x.mtimeMs - y.mtimeMs))
+        .map((x) => ({ src: x.url, name: `${groupIdx + 1}_${x.idx}` }))
+    );
   }
-
-  // Sort sections by earliest mtime within the group, then by name
-  const sectionsSorted = Array.from(sectionToItems.entries()).sort((a, b) => {
-    const aMin = Math.min(...a[1].map((x) => x.mtimeMs));
-    const bMin = Math.min(...b[1].map((x) => x.mtimeMs));
-    if (aMin !== bMin) return aMin - bMin;
-    return a[0].localeCompare(b[0]);
-  });
-
-  // Within each section, sort images by idx (1,2,3...), then mtime
-  const imageGroups: { src: string; idx: number }[][] = sectionsSorted.map(([_, items]) =>
-    items
-      .sort((x, y) => (x.idx !== y.idx ? x.idx - y.idx : x.mtimeMs - y.mtimeMs))
-      .map((x) => ({ src: x.url, idx: x.idx }))
-  );
-
-  // Optionally, normalize to first N groups and first 3 images each if needed
-  const normalizedGroups = imageGroups.map((group) => group.slice(0, 3));
-
-  // Assign display names like 1_1, 1_2, 1_3, 2_1, 2_2, 2_3, ...
-  const groupsWithNames: CarouselItemData[][] = normalizedGroups.map((group, groupIdx) =>
-    group.map((item) => ({ src: item.src, name: `${groupIdx + 1}_${item.idx}` }))
-  );
 
   return (
     <main className="w-full overflow-x-hidden">
