@@ -144,7 +144,7 @@ export async function POST(request) {
     });
       const images = await generateImage({
        model: azure.image("gpt-image-1"),
-       prompt: `Create a black and white wireframe mockup for a website section called "${section.SectionName}". This is a decription of its general structure: ${section.Description}. Style: Clean, minimal wireframe with black lines on white background, showing layout structure, boxes for content areas, placeholder text lines, and basic UI elements. No colors, no detailed graphics, just structural wireframe elements. `,
+       prompt: `Create a black and white wireframe mockup for a website section called "${section.SectionName}". This is a decription of its general structure: ${section.Description}. Style: Clean, minimal wireframe with black lines on white background, showing layout structure, boxes for content areas, placeholder text lines, and basic UI elements. No colors, no detailed graphics, just structural wireframe elements. Display only the section and nothing around it, no titles, no other blocks or any other content. Also make sure there is no outline around the thing`,
        size: "1536x1024",
        quality: "high",
        n: 3,
