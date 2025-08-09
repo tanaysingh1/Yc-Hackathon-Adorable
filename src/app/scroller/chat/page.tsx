@@ -3,11 +3,17 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ChatContainer } from "@/components/ui/chat-container";
-import { PromptInputBasic } from "@/components/chatinput";
 import { Markdown } from "@/components/ui/markdown";
-import type { CompressedImage } from "@/lib/image-compression";
+import { Button } from "@/components/ui/button";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputActions,
+} from "@/components/ui/prompt-input";
+import { compressImage, type CompressedImage } from "@/lib/image-compression";
+import { Paperclip, ArrowUp, X } from "lucide-react";
 
 type UIPart =
   | { type: "text"; text: string }
@@ -48,43 +54,68 @@ async function uploadCompressedImage(image: CompressedImage): Promise<string> {
 export default function ScrollerChatPage() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
+  const [images, setImages] = useState<CompressedImage[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const onSubmit = useCallback(() => {
-    if (!input.trim()) return;
-    const parts: UIPart[] = [{ type: "text", text: input }];
-    setMessages((prev) => [
-      ...prev,
-      { id: generateId(), role: "user", parts },
-    ]);
-    setInput("");
-  }, [input]);
+  const onSubmitCore = useCallback(async (text: string, imgs: CompressedImage[]) => {
+    const parts: UIPart[] = [];
+    if (text.trim()) {
+      parts.push({ type: "text", text });
+    }
+    if (imgs.length > 0) {
+      const uploadedUrls = await Promise.all(imgs.map((img) => uploadCompressedImage(img)));
+      uploadedUrls.forEach((url, i) => {
+        parts.push({ type: "file", mediaType: imgs[i]!.mimeType, url });
+      });
+    }
+    if (parts.length === 0) return;
+    setMessages((prev) => [...prev, { id: generateId(), role: "user", parts }]);
+  }, []);
 
-  const onSubmitWithImages = useCallback(
-    async (text: string, images: CompressedImage[]) => {
-      const parts: UIPart[] = [];
-      if (text.trim()) {
-        parts.push({ type: "text", text });
-      }
+  const onSend = useCallback(async () => {
+    await onSubmitCore(input, images);
 
-      if (images.length > 0) {
-        const uploadedUrls = await Promise.all(
-          images.map((img) => uploadCompressedImage(img))
-        );
-        uploadedUrls.forEach((url, i) => {
-          parts.push({ type: "file", mediaType: images[i]!.mimeType, url });
+    if (images.length > 0) {
+      try {
+        const firstImage = images[0]!;
+        const blob = await fetch(firstImage.data).then((r) => r.blob());
+        const filename = `upload.${getExtensionFromMime(firstImage.mimeType)}`;
+        const file = new File([blob], filename, { type: firstImage.mimeType });
+        const form = new FormData();
+        form.append("image", file, filename);
+
+        const res = await fetch("/api/createsections", {
+          method: "POST",
+          body: form,
         });
+        const data = await res.json();
+        console.log(data);
+      } catch (error) {
+        console.error("Failed to create sections", error);
       }
+    }
 
-      if (parts.length === 0) return;
+    setInput("");
+    setImages([]);
+  }, [input, images, onSubmitCore]);
 
-      setMessages((prev) => [
-        ...prev,
-        { id: generateId(), role: "user", parts },
-      ]);
-      setInput("");
-    },
-    []
-  );
+  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+    const newImages: CompressedImage[] = [];
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith("image/")) {
+        try {
+          const compressed = await compressImage(file);
+          newImages.push(compressed);
+        } catch (e) {
+          console.error("Failed to compress image", e);
+        }
+      }
+    }
+    setImages((prev) => [...prev, ...newImages]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
 
   const content = useMemo(
     () => (
@@ -98,18 +129,73 @@ export default function ScrollerChatPage() {
   );
 
   return (
-    <main className="min-h-screen w-full overflow-x-hidden overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[100vw] flex-col">
-        <div className="flex-1 p-4">{content}</div>
-        <div className="flex-shrink-0 p-3 bg-background">
-          <PromptInputBasic
-            input={input}
-            onValueChange={setInput}
-            onSubmit={onSubmit}
-            onSubmitWithImages={onSubmitWithImages}
-            isGenerating={false}
-            stop={() => {}}
-          />
+    <main className="min-h-screen w-full grid place-items-center overflow-x-hidden overflow-y-auto"> 
+      <div className="w-full max-w-2xl px-4">
+        <div className="h-[70vh] flex flex-col">
+          {/* <div className="flex-1 p-4">{content}</div> */}
+          {images.length > 0 && (
+            <div className="px-4 pb-2">
+              <div className="flex flex-wrap gap-2">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative group">
+                    <Image
+                      src={img.data}
+                      alt={`Upload ${idx + 1}`}
+                      width={72}
+                      height={72}
+                      className="w-18 h-18 object-cover rounded-lg border border-neutral-700"
+                    />
+                    <button
+                      onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove image"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="p-4">
+            <PromptInput
+              value={input}
+              onValueChange={setInput}
+              onSubmit={onSend}
+              className="rounded-2xl p-3"
+              leftSlot={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-xl"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip className="w-4 h-4 mr-2" /> Upload
+                </Button>
+              }
+            >
+              <PromptInputTextarea placeholder="Write a message..." />
+              <PromptInputActions className="mt-2">
+                <div className="flex-1" />
+                <Button
+                  type="button"
+                  className="rounded-xl"
+                  onClick={onSend}
+                  disabled={input.trim() === "" && images.length === 0}
+                >
+                  Send <ArrowUp className="w-4 h-4 ml-2" />
+                </Button>
+              </PromptInputActions>
+            </PromptInput>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
         </div>
       </div>
     </main>
@@ -123,8 +209,8 @@ function MessageBubble({ message }: { message: UIMessage }) {
       <div
         className={
           isUser
-            ? "bg-neutral-200 dark:bg-neutral-700 rounded-xl px-4 py-2 max-w-[80%] ml-auto"
-            : "bg-neutral-100 dark:bg-neutral-800 rounded-xl px-4 py-2 max-w-[80%]"
+            ? "bg-neutral-700 text-neutral-50 rounded-2xl px-4 py-2 max-w-[80%] ml-auto"
+            : "bg-neutral-800 text-neutral-100 rounded-2xl px-4 py-2 max-w-[80%]"
         }
       >
         {message.parts.map((part, index) => {
@@ -145,7 +231,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
                   alt="Uploaded image"
                   width={200}
                   height={200}
-                  className="max-w-full h-auto rounded"
+                  className="max-w-full h-auto rounded-lg border border-neutral-700"
                   style={{ maxHeight: "200px" }}
                 />
               </div>
