@@ -49,11 +49,24 @@ export async function POST(request) {
            {
              type: "text",
              text: `Analyze this hand-drawn webpage mockup and identify all the distinct page sections you can see. Look for areas like headers, content blocks, sidebars, footers, etc. Provide a detailed list of each section you identify, in the form of section name: section description. Section descriptions should be as detailed as possible; don't hallucinate or make up details, but make sure to detail everything you can see in the image. A good description of a page section includes information on its styling, information about the elements it contains and how they look, and information on where the section is located in relation to other sections.
-             \n\nEXAMPLE OF A GOOD RESPONSE
+          
+           IMPORTANT: ALL SECTIONS SHOULD BE ABOVE OR BELOW OTHER SECTIONS. IF YOU THINK TWO THINGS ARE SEPARATE SECTIONS AND THEY ARE NEXT TO EACH OTHER, COUNT THEM AS ONE SECTION REGARDLESS OF THE CONTENT THEY CONTAIN.
+          
+           IMPORTANT: ALL MODULAR/ ATOMIC COMPONENTS, SUCH AS SEARCH BARS, CARDS, ETC, SHOULD ALMOST NEVER BE MARKED AS A PAGE SECTION.
 
 
-             Header: The header bar has rounded corners and contains a button to log in and a button to sign up on the right side. It is directly above the sidebar and the main content
-             Sidebar: The sidebar has rounded corners and is a vertical rectangle. It contains 3 pill shaped buttons stacked on top of each other. One says 'create new', one says 'import from', and one says
+            \n\nEXAMPLE OF A GOOD RESPONSE
+
+
+
+
+            Header: The header bar has rounded corners and contains a button to log in and a button to sign up on the right side. It is directly above the main content
+            Main Content: The main content section has a sidebar on the left with rounded corners, and the sidebar contains a button that says create new. It also contains a main content section on the left that appears to be a page of documentation. This page has the title 'How to integrate Supabase Auth'. It is directly below the main content.
+            Footer: The Footer bar has the icons for Twitter, Youtube, and Instagram next to text that says follow us.
+
+
+            Notice that each section was either directly on top or below the other sections.
+
              `,
            },
            {
