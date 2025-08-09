@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
+import { createAzure } from "@ai-sdk/azure";
+import { experimental_generateImage as generateImage } from "ai";
+import fs from "fs";
+import path from "path";
 
 
 // Initialize OpenAI client
@@ -59,7 +63,6 @@ export async function POST(request) {
          ],
        },
      ],
-     max_tokens: 5000,
    });
 
 
@@ -91,7 +94,7 @@ export async function POST(request) {
    console.log("Step 2: Converting to structured format...");
    const structuredResponse = await openai.responses.parse({
      model: "gpt-4o",
-     messages: [
+     input: [
        {
          role: "system",
          content: `You will recieve a spec that describes a website that needs to be created. Your goal is to take the information you are given and format it into a JSON
@@ -103,59 +106,77 @@ export async function POST(request) {
          EXCEPTION: IF THERE IS ANY INFORMATION ABOUT WHERE A PAGE SECTION IS LOCATED ON A PAGE, DO NOT INCLUDE IT. EVER. DESCRIPTIONS LIKE " the sidebar is located to the left of the main content" ARE EXPRESSLY FORBIDDEN.
          `,
        },
+       { role: "user", content: `Here is the HTML: ${sectionsText}` },
      ],
      text: {
        format: zodTextFormat(sectionsSchema, "sections"),
      },
-     max_tokens: 5000,
    });
 
 
    const sections = structuredResponse.output_parsed.sections;
 
 
-   console.log(
-     `Step 3: Generating wireframes for ${sections.length} sections...`
-   );
+    console.log(
+      `Step 3: Generating wireframes for ${sections.length} sections...`
+    );
+
+    // Prepare output directory for saving generated images
+    const outputDir = path.join(process.cwd(), "public", "scroller", "new");
+    await fs.promises.mkdir(outputDir, { recursive: true });
+
+    const slugify = (value) =>
+      String(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
 
 
    const imageGenerationPromises = sections.map(async (section) => {
-     console.log(`Generating images for section: ${section.name}`);
+     console.log(`Generating images for section: ${section.SectionName}`);
 
 
      // Generate 3 images for each section in parallel
-     const images = await openai.images.generate({
-       model: "gpt-image-1",
-       prompt: `Create a black and white wireframe mockup for a website section called "${section.name}". This is a decription of its general structure: ${section.description}. Style: Clean, minimal wireframe with black lines on white background, showing layout structure, boxes for content areas, placeholder text lines, and basic UI elements. No colors, no detailed graphics, just structural wireframe elements. `,
+     const azure = createAzure({
+      resourceName: process.env.AZURE_OPENAI_RESOURCE,
+      apiKey: process.env.AZURE_OPENAI_API_KEY,
+    });
+      const images = await generateImage({
+       model: azure.image("gpt-image-1"),
+       prompt: `Create a black and white wireframe mockup for a website section called "${section.SectionName}". This is a decription of its general structure: ${section.Description}. Style: Clean, minimal wireframe with black lines on white background, showing layout structure, boxes for content areas, placeholder text lines, and basic UI elements. No colors, no detailed graphics, just structural wireframe elements. `,
        size: "1536x1024",
-       quality: "standard",
+       quality: "high",
        n: 3,
      });
      try {
-       // const imageResponses = await Promise.all(imagePromises);
-       // const imageUrls = imageResponses
-       //   .map((response) => response.data[0]?.url)
-       //   .filter((url) => url !== undefined);
-       let imageBlobs = [];
-       for (const image of images.data) {
-         imageBlobs.push(image.b64_json);
-       }
-
+        console.log(images.images);
+        const publicUrls = [];
+        const safeBaseName = slugify(section.SectionName || "section");
+        let index = 0;
+        for (const image of images.images) {
+          if (!image?.base64) continue;
+          const filename = `${safeBaseName}-${Date.now()}-${++index}.png`;
+          const filePath = path.join(outputDir, filename);
+          const buffer = Buffer.from(image.base64, "base64");
+          await fs.promises.writeFile(filePath, buffer);
+          publicUrls.push(`/scroller/new/${filename}`);
+        }
 
        return {
          sectionName: section.SectionName,
          sectionDescription: section.Description,
-         options: imageBlobs,
+          options: publicUrls,
        };
      } catch (error) {
        console.error(
-         `Failed to generate images for section ${section.name}:`,
+         `Failed to generate images for section ${section.SectionName}:`,
          error
        );
        // Return section with empty options if image generation fails
        return {
-         sectionName: section.name,
-         sectionDescription: section.description,
+         sectionName: section.SectionName,
+         sectionDescription: section.Description,
          options: [],
        };
      }
@@ -165,7 +186,7 @@ export async function POST(request) {
    // Wait for all image generation to complete
    const sectionsWithImages = await Promise.all(imageGenerationPromises);
 
-
+   
    // Step 4: Return the final result
    console.log("Step 4: Returning results...");
    return NextResponse.json(sectionsWithImages, { status: 200 });

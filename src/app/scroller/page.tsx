@@ -29,10 +29,10 @@ export default function ScrollerPage() {
     <main className="w-full overflow-x-hidden">
       <div className="mx-auto flex w-full max-w-[100vw] flex-col">
         {[
-          ["/scroller/lovable/1.png", "/scroller/v0/1.png"],
-          ["/scroller/lovable/2.png", "/scroller/v0/2.png"],
-          ["/scroller/lovable/3.png", "/scroller/v0/3.png"],
-          ["/scroller/lovable/4.png", "/scroller/v0/4.png"],
+          ["/scroller/new/header-1754777653164-1.png", "/scroller/new/header-1754777653168-2.png","/scroller/new/hero-section-1754777647631-3.png"],
+          ["/scroller/new/hero-section-1754777647613-1.png", "/scroller/new/hero-section-1754777647616-2.png","/scroller/new/hero-section-1754777647631-3.png"],
+          ["/scroller/new/content-grid-1754777650984-1.png", "/scroller/new/content-grid-1754777650988-2.png","/scroller/new/content-grid-1754777650991-3.png"],
+          ["/scroller/new/footer-1754777649263-1.png", "/scroller/new/footer-1754777649268-2.png","/scroller/new/footer-1754777649272-3.png"],
         ].map((images, index) => (
           <DemoCarousel key={index} images={images} />
         ))}
