@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/carousel";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { CompressedImage } from "@/lib/image-compression";
 
 export type CarouselItemData = { src: string; name: string };
 
@@ -29,6 +30,38 @@ export default function SubmitClient({
   };
 
 
+
+  // Helper function to convert image URL to CompressedImage format
+  const urlToCompressedImage = async (url: string): Promise<CompressedImage> => {
+    try {
+      // Fetch the image as a blob
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      
+      // Convert blob to base64
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Data = reader.result as string;
+          resolve({
+            data: base64Data,
+            mimeType: blob.type || "image/png",
+            originalSize: blob.size,
+            compressedSize: blob.size, // Not actually compressed since we're converting existing images
+          });
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("Failed to convert image URL to base64:", error);
+      throw error;
+    }
+  };
 
   const onCreateAppWithImages = async () => {
     const selections: { name: string; src: string }[] = [];
@@ -50,20 +83,37 @@ export default function SubmitClient({
     try {
       setCreatingApp(true);
       
-      // Create message parts with the selected images
+      // Convert selected images to CompressedImage format (base64)
+      const compressedImages: CompressedImage[] = [];
+      for (const selection of selections) {
+        try {
+          const compressedImage = await urlToCompressedImage(selection.src);
+          compressedImages.push(compressedImage);
+        } catch (error) {
+          console.error(`Failed to process image ${selection.name}:`, error);
+          // Continue with other images instead of failing completely
+        }
+      }
+
+      if (compressedImages.length === 0) {
+        alert("Failed to process any images. Please try again.");
+        return;
+      }
+
+      // Create message parts with the compressed images (same format as main form)
       const messageParts = [
         {
           type: "text",
-          text: `Create a web application using these ${selections.length} selected images. Please analyze the images and build something creative based on their content.`,
+          text: `Create a web application using these ${compressedImages.length} selected images. Please analyze the images and build something creative based on their content.`,
         },
-        ...selections.map((selection) => ({
+        ...compressedImages.map((image) => ({
           type: "file",
-          mediaType: "image/png", // You might want to detect the actual type
-          url: selection.src,
+          mediaType: image.mimeType,
+          url: image.data, // This is the base64 data
         })),
       ];
 
-      // Store the message data via API and get a reference ID
+      // Store the message data via API and get a reference ID (same as main form)
       const response = await fetch("/api/initial-message", {
         method: "POST",
         headers: {
