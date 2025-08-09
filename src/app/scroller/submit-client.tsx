@@ -10,6 +10,7 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export type CarouselItemData = { src: string; name: string };
 
@@ -19,14 +20,17 @@ export default function SubmitClient({
   groups: CarouselItemData[][];
 }) {
   const apisRef = useRef<CarouselApi[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  const [creatingApp, setCreatingApp] = useState(false);
+  const router = useRouter();
 
   const setApiAtIndex = (index: number, api: CarouselApi | undefined) => {
     if (!api) return;
     apisRef.current[index] = api;
   };
 
-  const onSubmit = async () => {
+
+
+  const onCreateAppWithImages = async () => {
     const selections: { name: string; src: string }[] = [];
     for (let i = 0; i < groups.length; i++) {
       const api = apisRef.current[i];
@@ -38,26 +42,52 @@ export default function SubmitClient({
       selections.push({ name: selected.name, src: selected.src });
     }
 
-    // Extract filenames from src
-    const files = selections
-      .map((s) => s.src.split("/").pop())
-      .filter((s): s is string => Boolean(s));
+    if (selections.length === 0) {
+      alert("No images selected!");
+      return;
+    }
 
     try {
-      setSubmitting(true);
-      const res = await fetch("/api/mark-selected", {
+      setCreatingApp(true);
+      
+      // Create message parts with the selected images
+      const messageParts = [
+        {
+          type: "text",
+          text: `Create a web application using these ${selections.length} selected images. Please analyze the images and build something creative based on their content.`,
+        },
+        ...selections.map((selection) => ({
+          type: "file",
+          mediaType: "image/png", // You might want to detect the actual type
+          url: selection.src,
+        })),
+      ];
+
+      // Store the message data via API and get a reference ID
+      const response = await fetch("/api/initial-message", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ files }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parts: messageParts,
+          templateId: "nextjs", // You can make this configurable
+        }),
       });
-      const json = await res.json();
-      // Log requested ids and API response
-      // IDs are the display names e.g. 1_1, 2_3
-      // Files are filenames e.g. 1_1.png
-      // eslint-disable-next-line no-console
-      console.log({ selectedIds: selections.map((s) => s.name), files, response: json });
+
+      if (!response.ok) {
+        throw new Error("Failed to store message data");
+      }
+
+      const { messageId } = await response.json();
+
+      // Navigate to create a new app with the message ID
+      router.push(`/app/new?messageId=${messageId}`);
+    } catch (error) {
+      console.error("Error creating app:", error);
+      alert("Failed to create app. Please try again.");
     } finally {
-      setSubmitting(false);
+      setCreatingApp(false);
     }
   };
 
@@ -92,10 +122,10 @@ export default function SubmitClient({
         <Button
           type="button"
           className="pointer-events-auto rounded-xl"
-          onClick={onSubmit}
-          disabled={submitting}
+          onClick={onCreateAppWithImages}
+          disabled={creatingApp}
         >
-          {submitting ? "Submitting..." : "Submit"}
+          {creatingApp ? "Creating App..." : "Create App from Images"}
         </Button>
       </div>
     </div>
