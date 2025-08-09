@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/carousel";
 import fs from "fs/promises";
 import path from "path";
+import SubmitClient, { type CarouselItemData as ClientCarouselItemData } from "./submit-client";
 
 type CarouselItemData = { src: string; name: string };
 
@@ -19,9 +20,6 @@ function DemoCarousel({ items }: { items: CarouselItemData[] }) {
             <CarouselItem key={index} className="basis-full">
               <div className="relative">
                 <img src={item.src} alt={item.name} className="block h-auto w-full" />
-                <div className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white">
-                  {item.name}
-                </div>
               </div>
             </CarouselItem>
           ))}
@@ -115,11 +113,7 @@ export default async function ScrollerPage() {
 
   return (
     <main className="w-full overflow-x-hidden">
-      <div className="mx-auto flex w-full max-w-[100vw] flex-col">
-        {groupsWithNames.map((items, index) => (
-          <DemoCarousel key={index} items={items} />
-        ))}
-      </div>
+      <SubmitClient groups={groupsWithNames as unknown as ClientCarouselItemData[][]} />
     </main>
   );
 }
