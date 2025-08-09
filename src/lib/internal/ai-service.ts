@@ -115,17 +115,20 @@ export class AIService {
       originalPartsCount: message.parts.length,
       convertedPartsCount: convertedParts.length,
       imageCount: message.parts.filter((p: any) => p.type === 'file').length,
-      parts: message.parts.map((p: any) => ({ 
+      textCount: message.parts.filter((p: any) => p.type === 'text').length,
+      parts: message.parts.map((p: any, index: number) => ({ 
+        index,
         type: p.type, 
         hasText: p.type === 'text' ? !!p.text : false,
         hasUrl: p.type === 'file' ? !!p.url : false,
         mediaType: p.mediaType 
       })),
-      convertedParts: convertedParts.map((p: any) => ({
+      convertedParts: convertedParts.map((p: any, index: number) => ({
+        index,
         type: p.type,
         hasText: p.type === 'text' ? !!p.text : false,
-        hasImageSource: p.type === 'image' ? !!p.source : false,
-        hasBase64Data: p.type === 'image' && p.source ? !!p.source.data : false
+        hasImageData: p.type === 'image' ? !!p.image : false,
+        mimeType: p.type === 'image' ? p.mimeType : undefined
       }))
     });
     

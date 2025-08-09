@@ -110,7 +110,8 @@ export async function createApp({
       }))
     });
     
-    console.time("send initial message");
+    const timingLabel = `send initial message - ${app.id}`;
+    console.time(timingLabel);
 
     // Send the initial message using the same infrastructure as the chat API
     await sendMessageWithStreaming(builderAgent, app.id, mcpEphemeralUrl, fs, {
@@ -119,7 +120,7 @@ export async function createApp({
       role: "user",
     });
 
-    console.timeEnd("send initial message");
+    console.timeEnd(timingLabel);
   }
 
   return app;

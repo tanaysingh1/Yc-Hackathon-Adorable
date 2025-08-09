@@ -30,11 +30,22 @@ export function EnhancedPromptInput({
   const [isCompressing, setIsCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const MAX_IMAGES = 5; // Maximum number of images allowed
+
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const files = event.target.files;
     if (!files) return;
+
+    // Check if adding these files would exceed the limit
+    const currentImageCount = images.length;
+    const newFilesCount = Array.from(files).filter(file => file.type.startsWith("image/")).length;
+    
+    if (currentImageCount + newFilesCount > MAX_IMAGES) {
+      alert(`You can only upload up to ${MAX_IMAGES} images. Currently have ${currentImageCount}, trying to add ${newFilesCount}.`);
+      return;
+    }
 
     setIsCompressing(true);
     const newImages: CompressedImage[] = [];
@@ -71,27 +82,40 @@ export function EnhancedPromptInput({
     <div className="w-full">
       {/* Image previews */}
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          {images.map((image, index) => (
-            <div key={index} className="relative group">
-              <Image
-                src={image.data}
-                alt={`Upload ${index + 1}`}
-                width={64}
-                height={64}
-                className="w-16 h-16 object-cover rounded border"
-              />
-              <button
-                onClick={() => removeImage(index)}
-                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="w-3 h-3" />
-              </button>
-              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b text-center">
-                {Math.round(image.compressedSize / 1024)}KB
+        <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {images.length} image{images.length > 1 ? 's' : ''} selected
+            </span>
+            <button
+              onClick={() => setImages([])}
+              className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {images.map((image, index) => (
+              <div key={index} className="relative group">
+                <Image
+                  src={image.data}
+                  alt={`Upload ${index + 1}`}
+                  width={64}
+                  height={64}
+                  className="w-16 h-16 object-cover rounded border"
+                />
+                <button
+                  onClick={() => removeImage(index)}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 rounded-b text-center">
+                  {Math.round(image.compressedSize / 1024)}KB
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
