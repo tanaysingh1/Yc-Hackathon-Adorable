@@ -112,8 +112,10 @@ export default async function ScrollerPage() {
   }
 
   return (
-    <main className="w-full overflow-x-hidden">
-      <SubmitClient groups={groupsWithNames as unknown as ClientCarouselItemData[][]} />
+    <main className="min-h-screen w-full overflow-x-hidden bg-neutral-950 text-neutral-100">
+      <div className="mx-auto max-w-[1100px] border-x border-neutral-800/60">
+        <SubmitClient groups={groupsWithNames as unknown as ClientCarouselItemData[][]} />
+      </div>
     </main>
   );
 }
