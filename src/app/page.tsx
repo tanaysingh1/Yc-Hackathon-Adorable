@@ -8,8 +8,20 @@ import { ExampleButton } from "@/components/ExampleButton";
 import { UserButton } from "@stackframe/stack";
 import { UserApps } from "@/components/user-apps";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { EnhancedPromptInput } from "@/components/enhanced-prompt-input";
 import { CompressedImage } from "@/lib/image-compression";
+import dynamic from "next/dynamic";
+
+const EnhancedPromptInput = dynamic(
+  () => import("@/components/enhanced-prompt-input").then(mod => ({ default: mod.EnhancedPromptInput })),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="w-full bg-accent rounded-md border p-4 animate-pulse">
+        <div className="h-12 bg-gray-200 rounded"></div>
+      </div>
+    )
+  }
+);
 
 const queryClient = new QueryClient();
 
@@ -17,35 +29,57 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [framework, setFramework] = useState("nextjs");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const handleSubmit = async (text: string, images: CompressedImage[]) => {
     setIsLoading(true);
+    setError("");
 
-    // Create a message parts structure similar to what the chat uses
-    const messageParts = [];
-    
-    if (text.trim()) {
-      messageParts.push({
-        type: "text",
-        text: text,
+    try {
+      // Create a message parts structure similar to what the chat uses
+      const messageParts = [];
+      
+      if (text.trim()) {
+        messageParts.push({
+          type: "text",
+          text: text,
+        });
+      }
+
+      images.forEach((image) => {
+        messageParts.push({
+          type: "file",
+          mediaType: image.mimeType,
+          url: image.data,
+        });
       });
+
+      // Store the message data via API and get a reference ID
+      const response = await fetch("/api/initial-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parts: messageParts,
+          templateId: framework,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to store message data");
+      }
+
+      const { messageId } = await response.json();
+
+      // Navigate with just the message ID
+      router.push(`/app/new?messageId=${messageId}`);
+    } catch (error) {
+      console.error("Error creating app:", error);
+      setError("Failed to create app. Please try again.");
+      setIsLoading(false);
     }
-
-    images.forEach((image) => {
-      messageParts.push({
-        type: "file",
-        mediaType: image.mimeType,
-        url: image.data,
-      });
-    });
-
-    // Encode the complex message structure as JSON
-    const messageData = JSON.stringify({ parts: messageParts });
-
-    router.push(
-      `/app/new?messageData=${encodeURIComponent(messageData)}&template=${framework}`
-    );
   };
 
   return (
@@ -74,6 +108,11 @@ export default function Home() {
             </p>
 
             <div className="w-full relative my-5">
+              {error && (
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
               <EnhancedPromptInput
                 prompt={prompt}
                 onPromptChange={setPrompt}

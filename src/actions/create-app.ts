@@ -97,6 +97,19 @@ export async function createApp({
     (initialMessage ? [{ text: initialMessage, type: "text" }] : null);
 
   if (messageParts && messageParts.length > 0) {
+    console.log(`🚀 Creating app with message parts:`, {
+      appId: app.id,
+      templateId,
+      partsCount: messageParts.length,
+      imageCount: messageParts.filter((p: any) => p.type === 'file').length,
+      parts: messageParts.map((p: any) => ({ 
+        type: p.type, 
+        hasText: p.type === 'text' ? !!p.text : false,
+        hasUrl: p.type === 'file' ? !!p.url : false,
+        mediaType: p.mediaType 
+      }))
+    });
+    
     console.time("send initial message");
 
     // Send the initial message using the same infrastructure as the chat API

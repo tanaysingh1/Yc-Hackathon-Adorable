@@ -15,20 +15,20 @@ function convertMessagePartsToAnthropicFormat(parts: UIMessage["parts"]): any[] 
         text: part.text,
       };
     } else if (part.type === "file" && part.mediaType?.startsWith("image/")) {
-      // Convert base64 data URL to Anthropic image format
-      // Handle both with and without data URL prefix
-      let base64Data = part.url;
-      if (part.url.includes(",")) {
-        base64Data = part.url.split(",")[1]; // Remove "data:image/jpeg;base64," prefix
+      // Convert to Mastra image format
+      if (!part.url) {
+        console.error("Image part missing URL:", part);
+        return {
+          type: "text",
+          text: "[Image upload failed - no URL]",
+        };
       }
       
+      // Mastra expects image format with 'image' field and 'mimeType'
       return {
         type: "image",
-        source: {
-          type: "base64",
-          media_type: part.mediaType,
-          data: base64Data,
-        },
+        image: part.url, // Use the full data URL as-is
+        mimeType: part.mediaType,
       };
     }
     // Return other parts as-is for compatibility
@@ -110,6 +110,25 @@ export class AIService {
     // Convert message parts to Anthropic format for proper AI processing
     const convertedParts = convertMessagePartsToAnthropicFormat(message.parts);
     
+    console.log(`🤖 AI Service processing message:`, {
+      messageId: message.id,
+      originalPartsCount: message.parts.length,
+      convertedPartsCount: convertedParts.length,
+      imageCount: message.parts.filter((p: any) => p.type === 'file').length,
+      parts: message.parts.map((p: any) => ({ 
+        type: p.type, 
+        hasText: p.type === 'text' ? !!p.text : false,
+        hasUrl: p.type === 'file' ? !!p.url : false,
+        mediaType: p.mediaType 
+      })),
+      convertedParts: convertedParts.map((p: any) => ({
+        type: p.type,
+        hasText: p.type === 'text' ? !!p.text : false,
+        hasImageSource: p.type === 'image' ? !!p.source : false,
+        hasBase64Data: p.type === 'image' && p.source ? !!p.source.data : false
+      }))
+    });
+    
     // Create a properly formatted message for the AI agent
     const agentMessage = {
       role: "user" as const,
@@ -121,11 +140,11 @@ export class AIService {
     if (memory) {
       await memory.saveMessages({
         messages: [
-          {
-            content: {
-              parts: message.parts,
-              format: 3,
-            },
+                  {
+          content: {
+            parts: message.parts as any,
+            format: 3,
+          },
             role: "user",
             createdAt: new Date(),
             id: message.id,
@@ -143,43 +162,57 @@ export class AIService {
     });
 
     // Pass the converted message to the agent instead of empty array
-    const stream = await agent.stream([agentMessage], {
-      threadId: appId,
-      resourceId: appId,
-      maxSteps: options?.maxSteps ?? 100,
-      maxRetries: options?.maxRetries ?? 0,
-      maxOutputTokens: options?.maxOutputTokens ?? 64000,
-      toolsets: {
-        ...(process.env.MORPH_API_KEY
-          ? {
-              morph: {
-                edit_file: morphTool(fs),
-              },
-            }
-          : {}),
-        ...freestyleToolsets,
-      },
-      async onChunk() {
-        options?.onChunk?.();
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      async onStepFinish(step: { response: { messages: unknown[] } }) {
+    let stream;
+    try {
+      console.log(`🎯 About to call agent.stream with agentMessage:`, {
+        role: agentMessage.role,
+        contentLength: agentMessage.content?.length,
+        contentTypes: agentMessage.content?.map((c: any) => c.type)
+      });
+      
+      stream = await agent.stream([agentMessage], {
+        threadId: appId,
+        resourceId: appId,
+        maxSteps: options?.maxSteps ?? 100,
+        maxRetries: options?.maxRetries ?? 0,
+        maxOutputTokens: options?.maxOutputTokens ?? 64000,
+        toolsets: {
+          ...(process.env.MORPH_API_KEY
+            ? {
+                morph: {
+                  edit_file: morphTool(fs),
+                },
+              }
+            : {}),
+          ...freestyleToolsets,
+        },
+        async onChunk() {
+          options?.onChunk?.();
+        },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        messageList.add(step.response.messages as any, "response");
-        options?.onStepFinish?.(step);
-      },
-      onError: async (error: { error: unknown }) => {
-        // Handle cleanup internally
-        await mcp.disconnect();
-        options?.onError?.(error);
-      },
-      onFinish: async () => {
-        // Handle cleanup internally
-        await mcp.disconnect();
-        options?.onFinish?.();
-      },
-      abortSignal: options?.abortSignal,
-    });
+        async onStepFinish(step: { response: { messages: unknown[] } }) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          messageList.add(step.response.messages as any, "response");
+          options?.onStepFinish?.(step);
+        },
+        onError: async (error: { error: unknown }) => {
+          // Handle cleanup internally
+          await mcp.disconnect();
+          options?.onError?.(error);
+        },
+        onFinish: async () => {
+          // Handle cleanup internally
+          await mcp.disconnect();
+          options?.onFinish?.();
+        },
+        abortSignal: options?.abortSignal,
+      });
+    } catch (error) {
+      console.error(`💥 Error calling agent.stream:`, error);
+      console.error(`🔍 Agent message that failed:`, JSON.stringify(agentMessage, null, 2));
+      await mcp.disconnect();
+      throw error;
+    }
 
     // Ensure the stream has the proper method
     if (!stream.toUIMessageStreamResponse) {
