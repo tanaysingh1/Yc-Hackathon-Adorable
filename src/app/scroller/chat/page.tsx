@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/prompt-input";
 import { compressImage, type CompressedImage } from "@/lib/image-compression";
 import { Paperclip, ArrowUp, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type UIPart =
   | { type: "text"; text: string }
@@ -57,7 +58,7 @@ export default function ScrollerChatPage() {
   const [images, setImages] = useState<CompressedImage[]>([]);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const router = useRouter();
   const onSubmitCore = useCallback(async (text: string, imgs: CompressedImage[]) => {
     const parts: UIPart[] = [];
     if (text.trim()) {
@@ -96,6 +97,7 @@ export default function ScrollerChatPage() {
         console.error("Failed to create sections", error);
       } finally {
         setLoading(false);
+        router.push("/scroller");
       }
     }
 
